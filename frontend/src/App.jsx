@@ -99,16 +99,52 @@ function App() {
     }
   };
 
+  // Helper function to convert markdown style [text](url) into React links
+  const parseMarkdownLinks = (text) => {
+    if (!text) return "";
+    const parts = [];
+    const linkRegex = /\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g;
+    let lastIndex = 0;
+    let match;
+
+    while ((match = linkRegex.exec(text)) !== null) {
+      const matchIndex = match.index;
+      if (matchIndex > lastIndex) {
+        parts.push(text.substring(lastIndex, matchIndex));
+      }
+      parts.push(
+        <a 
+          key={matchIndex} 
+          href={match[2]} 
+          target="_blank" 
+          rel="noopener noreferrer"
+          style={{ color: AGENT_COLORS[activeAgent] || 'var(--color-triage)', textDecoration: 'underline', fontWeight: 600 }}
+        >
+          {match[1]}
+        </a>
+      );
+      lastIndex = linkRegex.lastIndex;
+    }
+
+    if (lastIndex < text.length) {
+      parts.push(text.substring(lastIndex));
+    }
+
+    return parts.length > 0 ? parts : text;
+  };
+
   // Helper function to render text with clean custom card formatting for booking references
   const renderMessageContent = (content) => {
     // Detect custom references like Flight: AA-101 or Bookings: FL-XYZ987 and highlight them
     const bookingRegex = /(FL-[A-Z0-9]{6}|HT-[A-Z0-9]{6}|HT-Grand|HT-Cozy|AA-101|DL-202|UA-303|BA-404)/gi;
     
+    const parsedContent = parseMarkdownLinks(content);
+
     if (bookingRegex.test(content)) {
       // Add visual cards for specific structured data items
       return (
         <div>
-          <p style={{ whiteSpace: 'pre-wrap' }}>{content}</p>
+          <p style={{ whiteSpace: 'pre-wrap' }}>{parsedContent}</p>
           <div className="booking-card" style={{ '--accent': AGENT_COLORS[activeAgent] }}>
             <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
               Detected Booking Reference
@@ -121,7 +157,7 @@ function App() {
       );
     }
 
-    return <p style={{ whiteSpace: 'pre-wrap' }}>{content}</p>;
+    return <p style={{ whiteSpace: 'pre-wrap' }}>{parsedContent}</p>;
   };
 
   const agentColor = AGENT_COLORS[activeAgent] || 'var(--color-triage)';

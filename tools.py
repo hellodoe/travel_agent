@@ -12,12 +12,12 @@ from agents import function_tool
 
 HOTEL_DB = {
     "PAR": [
-        {"hotel_id": "HT-Grand-Paris", "name": "Grand Palace Hotel Paris", "price_per_night": 180.00, "rating": 4.8},
-        {"hotel_id": "HT-Cozy-Paris", "name": "Cozy Stay Inn Paris", "price_per_night": 95.00, "rating": 4.2},
+        {"hotel_id": "HT-Grand-Paris", "name": "Grand Palace Hotel Paris", "price_per_night": 180.00, "rating": 4.8, "url": "https://www.booking.com/hotel/fr/le-grand-paris.html"},
+        {"hotel_id": "HT-Cozy-Paris", "name": "Cozy Stay Inn Paris", "price_per_night": 95.00, "rating": 4.2, "url": "https://www.booking.com/hotel/fr/cozy-stay-paris.html"},
     ],
     "LON": [
-        {"hotel_id": "HT-Royal-London", "name": "Royal Savoy London", "price_per_night": 220.00, "rating": 4.9},
-        {"hotel_id": "HT-Metro-London", "name": "Metro Central Lodge", "price_per_night": 110.00, "rating": 4.0},
+        {"hotel_id": "HT-Royal-London", "name": "Royal Savoy London", "price_per_night": 220.00, "rating": 4.9, "url": "https://www.booking.com/hotel/gb/the-savoy.html"},
+        {"hotel_id": "HT-Metro-London", "name": "Metro Central Lodge", "price_per_night": 110.00, "rating": 4.0, "url": "https://www.booking.com/hotel/gb/metro-lodge.html"},
     ]
 }
 
@@ -259,12 +259,18 @@ async def search_hotels(location: str, checkin: str, checkout: Optional[str] = N
                 except Exception:
                     price = 150.00
                 
+                url = item.get("url")
+                if not url:
+                    hotel_name_encoded = item.get("hotel_name", "Unknown Hotel").replace(" ", "+")
+                    url = f"https://www.booking.com/searchresults.html?ss={hotel_name_encoded}"
+                
                 results.append({
                     "hotel_id": str(item.get("hotel_id", "")),
                     "name": item.get("hotel_name", "Unknown Hotel"),
                     "price_per_night": price,
                     "rating": float(item.get("review_score", 0.0) / 2.0),
-                    "location": location
+                    "location": location,
+                    "url": url
                 })
             
             if not results:

@@ -32,7 +32,8 @@ hotel_agent = Agent(
         "After reserving a hotel, hand off the user to the Itinerary Specialist if they want to plan activities, "
         "otherwise return control to the Triage Agent. "
         "If the check-in date is missing, ask the user for it. If the check-out date is missing, the search_hotels tool will default it to 1 day after check-in, but you should inform the user of this or ask if they prefer a different date. "
-        "Always respond to the user with a helpful message; never return an empty response."
+        "Always respond to the user with a helpful message; never return an empty response. "
+        "When listing hotel options, always format the hotel name as a clickable markdown link using the 'url' key provided in the tool results (e.g. [Hotel Name](URL)), so the user can easily check them."
     ),
     tools=[search_hotels, book_hotel],
 )
