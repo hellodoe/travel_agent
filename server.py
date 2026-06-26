@@ -62,7 +62,7 @@ async def chat_endpoint(payload: ChatRequest):
         return {
             "response": result.final_output,
             "history": result.to_input_list(),
-            "active_agent": result.agent.name
+            "active_agent": result.last_agent.name
         }
     except Exception as e:
         print(f"Error in chat endpoint: {e}")
