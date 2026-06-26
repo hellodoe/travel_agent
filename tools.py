@@ -173,6 +173,20 @@ async def book_flight(booking: FlightBookingRequest) -> Dict[str, Any]:
         "message": "Flight booked successfully!"
     }
 
+async def _resolve_dest_id(query: str, headers: dict, host: str) -> tuple:
+    url = f"https://{host}/v1/hotels/locations"
+    params = {"name": query, "locale": "en-gb"}
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=headers, timeout=15.0)
+            if response.status_code == 200:
+                data = response.json()
+                if data and isinstance(data, list):
+                    return data[0].get("dest_id"), data[0].get("dest_type")
+    except Exception as e:
+        print(f"[Warning] Failed to resolve destination ID for '{query}': {e}")
+    raise ValueError(f"Could not resolve destination ID for '{query}'")
+
 @function_tool
 async def search_hotels(location: str, checkin: str, checkout: str, guests: int) -> List[Dict[str, Any]]:
     """
@@ -186,14 +200,78 @@ async def search_hotels(location: str, checkin: str, checkout: str, guests: int)
     print(f"\n[Tool Execution: search_hotels]")
     print(f" -> Location: {location}, Checkin: {checkin}, Checkout: {checkout}, Guests: {guests}")
     
-    loc_key = location.upper()
-    results = HOTEL_DB.get(loc_key, [])
-    if not results:
-        for key, val in HOTEL_DB.items():
-            if key in loc_key or loc_key in key:
-                results = val
-                break
-    return results
+    RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+    HOTEL_RAPIDAPI_HOST = os.getenv("HOTEL_RAPIDAPI_HOST", "booking-com.p.rapidapi.com")
+    
+    if not RAPIDAPI_KEY or "your-rapidapi-key" in RAPIDAPI_KEY:
+        print("[RapidAPI] Key not configured. Using local mock database.")
+        loc_key = location.upper()
+        results = HOTEL_DB.get(loc_key, [])
+        if not results:
+            for key, val in HOTEL_DB.items():
+                if key in loc_key or loc_key in key:
+                    results = val
+                    break
+        return results
+
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": HOTEL_RAPIDAPI_HOST
+    }
+
+    try:
+        dest_id, dest_type = await _resolve_dest_id(location, headers, HOTEL_RAPIDAPI_HOST)
+        
+        url = f"https://{HOTEL_RAPIDAPI_HOST}/v1/hotels/search"
+        params = {
+            "dest_id": dest_id,
+            "dest_type": dest_type,
+            "checkin_date": checkin,
+            "checkout_date": checkout,
+            "adults_number": str(guests),
+            "room_number": "1",
+            "units": "metric",
+            "locale": "en-gb",
+            "filter_by_currency": "USD"
+        }
+        
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=headers, timeout=20.0)
+            response.raise_for_status()
+            data = response.json()
+            
+            hotels_data = data.get("result", [])
+            results = []
+            
+            for item in hotels_data[:5]:
+                min_price = item.get("min_total_price", 0.0)
+                try:
+                    price = float(min_price) / max(1, (guests or 1))
+                except Exception:
+                    price = 150.00
+                
+                results.append({
+                    "hotel_id": str(item.get("hotel_id", "")),
+                    "name": item.get("hotel_name", "Unknown Hotel"),
+                    "price_per_night": price,
+                    "rating": float(item.get("review_score", 0.0) / 2.0),
+                    "location": location
+                })
+            
+            if not results:
+                raise ValueError("No hotels returned from the search API.")
+            return results
+
+    except Exception as e:
+        print(f"[RapidAPI Hotel Error] {e}. Falling back to local mock data.")
+        loc_key = location.upper()
+        results = HOTEL_DB.get(loc_key, [])
+        if not results:
+            for key, val in HOTEL_DB.items():
+                if key in loc_key or loc_key in key:
+                    results = val
+                    break
+        return results
 
 @function_tool
 async def book_hotel(booking: HotelBookingRequest) -> Dict[str, Any]:
@@ -205,19 +283,17 @@ async def book_hotel(booking: HotelBookingRequest) -> Dict[str, Any]:
     print(f"\n[Tool Execution: book_hotel]")
     print(f" -> Hotel ID: {booking.hotel_id}, Room Type: {booking.room_type}, Breakfast: {booking.include_breakfast}")
     
-    hotel = None
+    hotel_name = "Selected Premium Hotel"
     for loc, hotels in HOTEL_DB.items():
-        hotel = next((h for h in hotels if h["hotel_id"] == booking.hotel_id), None)
-        if hotel:
+        match = next((h for h in hotels if str(h["hotel_id"]) == str(booking.hotel_id)), None)
+        if match:
+            hotel_name = match["name"]
             break
             
-    if not hotel:
-        return {"status": "error", "message": f"Hotel {booking.hotel_id} not found."}
-        
     return {
         "status": "success",
         "booking_reference": "HT-ABC123",
-        "hotel_name": hotel["name"],
+        "hotel_name": hotel_name,
         "hotel_id": booking.hotel_id,
         "room_type": booking.room_type,
         "message": "Hotel room reserved successfully!"
