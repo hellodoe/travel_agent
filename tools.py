@@ -40,6 +40,20 @@ ACTIVITIES_DB = {
 # Tool Implementations
 # ==========================================
 
+async def _resolve_place_id(query: str, headers: dict, host: str) -> str:
+    url = f"https://{host}/web/flights/auto-complete"
+    params = {"query": query, "locale": "en-US"}
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(url, params=params, headers=headers, timeout=15.0)
+            if response.status_code == 200:
+                data = response.json().get("data", [])
+                if data:
+                    return data[0].get("PlaceId", query.upper())
+    except Exception as e:
+        print(f"[Warning] Failed to resolve place ID for '{query}': {e}")
+    return query.upper()
+
 @function_tool
 async def search_flights(origin: str, destination: str, departure_date: str) -> List[Dict[str, Any]]:
     """
@@ -63,27 +77,65 @@ async def search_flights(origin: str, destination: str, departure_date: str) -> 
         "X-RapidAPI-Host": RAPIDAPI_HOST
     }
 
-    params = {
-        "originSkyId": origin.upper(),
-        "destinationSkyId": destination.upper(),
-        "date": departure_date,
-        "cabinClass": "economy",
-        "adults": "1"
-    }
+    if "flights-sky" in RAPIDAPI_HOST:
+        resolved_origin = await _resolve_place_id(origin, headers, RAPIDAPI_HOST)
+        resolved_destination = await _resolve_place_id(destination, headers, RAPIDAPI_HOST)
+        
+        url = f"https://{RAPIDAPI_HOST}/web/flights/search-one-way"
+        params = {
+            "placeIdFrom": resolved_origin,
+            "placeIdTo": resolved_destination,
+            "departDate": departure_date,
+            "cabinClass": "economy",
+            "adults": "1",
+            "currency": "USD",
+            "market": "US",
+            "locale": "en-US"
+        }
+    else:
+        url = f"https://{RAPIDAPI_HOST}/api/v1/flights/searchFlights"
+        params = {
+            "originSkyId": origin.upper(),
+            "destinationSkyId": destination.upper(),
+            "date": departure_date,
+            "cabinClass": "economy",
+            "adults": "1"
+        }
 
     async with httpx.AsyncClient() as client:
-        response = await client.get(
-            f"https://{RAPIDAPI_HOST}/api/v1/flights/searchFlights",
-            params=params,
-            headers=headers,
-            timeout=12.0
-        )
-        response.raise_for_status()
+        response = await client.get(url, params=params, headers=headers, timeout=45.0)
+        
+        if response.status_code != 200:
+            print(f" -> API Error Response ({response.status_code}): {response.text}")
+            response.raise_for_status()
+            
         data = response.json()
         
-        flights_data = data.get("data", {}).get("itineraries", [])
-        results = []
+        if not data.get("status", True):
+            error_msg = data.get("message", "Unknown error")
+            errors = data.get("errors")
+            if errors:
+                error_msg += f" ({errors})"
+            raise ValueError(f"RapidAPI Search Error: {error_msg}")
+            
+        itineraries = data.get("data", {}).get("itineraries", []) if data.get("data") else []
         
+        if isinstance(itineraries, dict):
+            flights_data = []
+            seen_ids = set()
+            buckets = itineraries.get("buckets", [])
+            for bucket in buckets:
+                for item in bucket.get("items", []):
+                    item_id = item.get("id")
+                    if item_id not in seen_ids:
+                        seen_ids.add(item_id)
+                        flights_data.append(item)
+            if not flights_data:
+                flights_data = itineraries.get("results", [])
+        else:
+            flights_data = itineraries
+
+        results = []
         for item in flights_data[:5]:
             legs = item.get("legs", [{}])[0]
             carriers = legs.get("carriers", {}).get("marketing", [{}])[0]
