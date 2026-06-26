@@ -14,6 +14,9 @@ FLIGHT_DB = [
     {"flight_id": "DL-202", "airline": "Delta Air Lines", "price": 480.00, "time": "11:30 AM", "origin": "NYC", "destination": "PAR"},
     {"flight_id": "UA-303", "airline": "United Airlines", "price": 520.00, "time": "06:15 PM", "origin": "NYC", "destination": "LON"},
     {"flight_id": "BA-404", "airline": "British Airways", "price": 610.00, "time": "09:00 PM", "origin": "NYC", "destination": "LON"},
+    {"flight_id": "VS-103", "airline": "Virgin Atlantic", "price": 580.00, "time": "10:30 AM", "origin": "LHR", "destination": "JFK"},
+    {"flight_id": "BA-112", "airline": "British Airways", "price": 620.00, "time": "02:15 PM", "origin": "LHR", "destination": "JFK"},
+    {"flight_id": "AA-104", "airline": "American Airlines", "price": 490.00, "time": "06:00 PM", "origin": "JFK", "destination": "LHR"},
 ]
 
 HOTEL_DB = {
