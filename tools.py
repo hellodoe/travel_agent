@@ -9,15 +9,6 @@ from agents import function_tool
 # Mock Database Definitions
 # ==========================================
 
-FLIGHT_DB = [
-    {"flight_id": "AA-101", "airline": "American Airlines", "price": 450.00, "time": "08:00 AM", "origin": "NYC", "destination": "PAR"},
-    {"flight_id": "DL-202", "airline": "Delta Air Lines", "price": 480.00, "time": "11:30 AM", "origin": "NYC", "destination": "PAR"},
-    {"flight_id": "UA-303", "airline": "United Airlines", "price": 520.00, "time": "06:15 PM", "origin": "NYC", "destination": "LON"},
-    {"flight_id": "BA-404", "airline": "British Airways", "price": 610.00, "time": "09:00 PM", "origin": "NYC", "destination": "LON"},
-    {"flight_id": "VS-103", "airline": "Virgin Atlantic", "price": 580.00, "time": "10:30 AM", "origin": "LHR", "destination": "JFK"},
-    {"flight_id": "BA-112", "airline": "British Airways", "price": 620.00, "time": "02:15 PM", "origin": "LHR", "destination": "JFK"},
-    {"flight_id": "AA-104", "airline": "American Airlines", "price": 490.00, "time": "06:00 PM", "origin": "JFK", "destination": "LHR"},
-]
 
 HOTEL_DB = {
     "PAR": [
@@ -64,10 +55,8 @@ async def search_flights(origin: str, destination: str, departure_date: str) -> 
     RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
     RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "sky-scrapper.p.rapidapi.com")
     
-    # Fallback if no key is configured
     if not RAPIDAPI_KEY or "your-rapidapi-key" in RAPIDAPI_KEY:
-        print("[RapidAPI] Key not configured. Using local mock database.")
-        return [f for f in FLIGHT_DB if f["origin"].upper() == origin.upper() and f["destination"].upper() == destination.upper()]
+        raise ValueError("RapidAPI key not configured in .env file. Please check your setup.")
 
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -82,40 +71,35 @@ async def search_flights(origin: str, destination: str, departure_date: str) -> 
         "adults": "1"
     }
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                f"https://{RAPIDAPI_HOST}/api/v1/flights/searchFlights",
-                params=params,
-                headers=headers,
-                timeout=12.0
-            )
-            response.raise_for_status()
-            data = response.json()
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            f"https://{RAPIDAPI_HOST}/api/v1/flights/searchFlights",
+            params=params,
+            headers=headers,
+            timeout=12.0
+        )
+        response.raise_for_status()
+        data = response.json()
+        
+        flights_data = data.get("data", {}).get("itineraries", [])
+        results = []
+        
+        for item in flights_data[:5]:
+            legs = item.get("legs", [{}])[0]
+            carriers = legs.get("carriers", {}).get("marketing", [{}])[0]
             
-            flights_data = data.get("data", {}).get("itineraries", [])
-            results = []
+            results.append({
+                "flight_id": item.get("id", "N/A"),
+                "airline": carriers.get("name", "Unknown Airline"),
+                "price": float(item.get("price", {}).get("raw", 0.0)),
+                "time": legs.get("departure", "N/A"),
+                "origin": origin,
+                "destination": destination
+            })
             
-            for item in flights_data[:5]:
-                legs = item.get("legs", [{}])[0]
-                carriers = legs.get("carriers", {}).get("marketing", [{}])[0]
-                
-                results.append({
-                    "flight_id": item.get("id", "N/A"),
-                    "airline": carriers.get("name", "Unknown Airline"),
-                    "price": float(item.get("price", {}).get("raw", 0.0)),
-                    "time": legs.get("departure", "N/A"),
-                    "origin": origin,
-                    "destination": destination
-                })
-                
-            if not results:
-                raise ValueError("No flights returned from API.")
-            return results
-
-    except Exception as e:
-        print(f"[RapidAPI Error] {e}. Falling back to local mock data.")
-        return [f for f in FLIGHT_DB if f["origin"].upper() == origin.upper() and f["destination"].upper() == destination.upper()]
+        if not results:
+            raise ValueError("No flights returned from the search API.")
+        return results
 
 @function_tool
 async def book_flight(booking: FlightBookingRequest) -> Dict[str, Any]:
@@ -127,16 +111,12 @@ async def book_flight(booking: FlightBookingRequest) -> Dict[str, Any]:
     print(f"\n[Tool Execution: book_flight]")
     print(f" -> Flight ID: {booking.flight_id}, Seat: {booking.seat_preference}, Meal: {booking.meal_preference}")
     
-    flight = next((f for f in FLIGHT_DB if f["flight_id"] == booking.flight_id), None)
-    if not flight:
-        return {"status": "error", "message": f"Flight {booking.flight_id} not found."}
-        
     return {
         "status": "success",
         "booking_reference": "FL-XYZ987",
         "flight_id": booking.flight_id,
-        "airline": flight["airline"],
-        "price": flight["price"],
+        "airline": "Selected Carrier",
+        "price": 490.00,
         "seat": booking.seat_preference,
         "message": "Flight booked successfully!"
     }
