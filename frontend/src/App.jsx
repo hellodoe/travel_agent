@@ -146,10 +146,10 @@ function App() {
         <div>
           <p style={{ whiteSpace: 'pre-wrap' }}>{parsedContent}</p>
           <div className="booking-card" style={{ '--accent': AGENT_COLORS[activeAgent] }}>
-            <span style={{ fontSize: '11px', fontWeight: 700, color: 'rgba(255,255,255,0.4)', textTransform: 'uppercase' }}>
+            <span style={{ fontSize: '11px', fontWeight: 700, color: 'var(--text-muted)', textTransform: 'uppercase' }}>
               Detected Booking Reference
             </span>
-            <span style={{ fontSize: '14px', fontWeight: 600, color: '#f3f4f6' }}>
+            <span style={{ fontSize: '14px', fontWeight: 600, color: 'var(--text-primary)' }}>
               Confirmation code / ID generated.
             </span>
           </div>

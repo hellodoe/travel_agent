@@ -187,6 +187,37 @@ async def _resolve_dest_id(query: str, headers: dict, host: str) -> tuple:
         print(f"[Warning] Failed to resolve destination ID for '{query}': {e}")
     raise ValueError(f"Could not resolve destination ID for '{query}'")
 
+def _get_mock_hotels(location: str) -> List[Dict[str, Any]]:
+    loc_key = location.upper()
+    results = HOTEL_DB.get(loc_key, [])
+    if not results:
+        for key, val in HOTEL_DB.items():
+            if key in loc_key or loc_key in key:
+                results = val
+                break
+    if not results:
+        # Dynamically generate mock hotels for any city not in the hardcoded HOTEL_DB
+        loc_display = location.strip().title()
+        results = [
+            {
+                "hotel_id": f"HT-{loc_key}-Grand",
+                "name": f"Grand Plaza Hotel {loc_display}",
+                "price_per_night": 140.00,
+                "rating": 4.7,
+                "location": loc_key,
+                "url": f"https://www.booking.com/searchresults.html?ss={loc_display.replace(' ', '+')}+Grand+Plaza"
+            },
+            {
+                "hotel_id": f"HT-{loc_key}-Cozy",
+                "name": f"Cozy Boutique Retreat {loc_display}",
+                "price_per_night": 85.00,
+                "rating": 4.1,
+                "location": loc_key,
+                "url": f"https://www.booking.com/searchresults.html?ss={loc_display.replace(' ', '+')}+Cozy+Boutique"
+            }
+        ]
+    return results
+
 @function_tool
 async def search_hotels(location: str, checkin: str, checkout: Optional[str] = None, guests: int = 1) -> List[Dict[str, Any]]:
     """
@@ -214,14 +245,7 @@ async def search_hotels(location: str, checkin: str, checkout: Optional[str] = N
     
     if not RAPIDAPI_KEY or "your-rapidapi-key" in RAPIDAPI_KEY:
         print("[RapidAPI] Key not configured. Using local mock database.")
-        loc_key = location.upper()
-        results = HOTEL_DB.get(loc_key, [])
-        if not results:
-            for key, val in HOTEL_DB.items():
-                if key in loc_key or loc_key in key:
-                    results = val
-                    break
-        return results
+        return _get_mock_hotels(location)
 
     headers = {
         "X-RapidAPI-Key": RAPIDAPI_KEY,
@@ -279,14 +303,7 @@ async def search_hotels(location: str, checkin: str, checkout: Optional[str] = N
 
     except Exception as e:
         print(f"[RapidAPI Hotel Error] {e}. Falling back to local mock data.")
-        loc_key = location.upper()
-        results = HOTEL_DB.get(loc_key, [])
-        if not results:
-            for key, val in HOTEL_DB.items():
-                if key in loc_key or loc_key in key:
-                    results = val
-                    break
-        return results
+        return _get_mock_hotels(location)
 
 @function_tool
 async def book_hotel(booking: HotelBookingRequest) -> Dict[str, Any]:
