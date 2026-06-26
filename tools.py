@@ -1,3 +1,5 @@
+import os
+import httpx
 from typing import List, Dict, Any, Optional
 from models import FlightBookingRequest, HotelBookingRequest
 # pyrefly: ignore [missing-import]
@@ -56,8 +58,61 @@ async def search_flights(origin: str, destination: str, departure_date: str) -> 
     print(f"\n[Tool Execution: search_flights]")
     print(f" -> Origin: {origin}, Destination: {destination}, Date: {departure_date}")
     
-    results = [f for f in FLIGHT_DB if f["origin"].upper() == origin.upper() and f["destination"].upper() == destination.upper()]
-    return results
+    RAPIDAPI_KEY = os.getenv("RAPIDAPI_KEY")
+    RAPIDAPI_HOST = os.getenv("RAPIDAPI_HOST", "sky-scrapper.p.rapidapi.com")
+    
+    # Fallback if no key is configured
+    if not RAPIDAPI_KEY or "your-rapidapi-key" in RAPIDAPI_KEY:
+        print("[RapidAPI] Key not configured. Using local mock database.")
+        return [f for f in FLIGHT_DB if f["origin"].upper() == origin.upper() and f["destination"].upper() == destination.upper()]
+
+    headers = {
+        "X-RapidAPI-Key": RAPIDAPI_KEY,
+        "X-RapidAPI-Host": RAPIDAPI_HOST
+    }
+
+    params = {
+        "originSkyId": origin.upper(),
+        "destinationSkyId": destination.upper(),
+        "date": departure_date,
+        "cabinClass": "economy",
+        "adults": "1"
+    }
+
+    try:
+        async with httpx.AsyncClient() as client:
+            response = await client.get(
+                f"https://{RAPIDAPI_HOST}/api/v1/flights/searchFlights",
+                params=params,
+                headers=headers,
+                timeout=12.0
+            )
+            response.raise_for_status()
+            data = response.json()
+            
+            flights_data = data.get("data", {}).get("itineraries", [])
+            results = []
+            
+            for item in flights_data[:5]:
+                legs = item.get("legs", [{}])[0]
+                carriers = legs.get("carriers", {}).get("marketing", [{}])[0]
+                
+                results.append({
+                    "flight_id": item.get("id", "N/A"),
+                    "airline": carriers.get("name", "Unknown Airline"),
+                    "price": float(item.get("price", {}).get("raw", 0.0)),
+                    "time": legs.get("departure", "N/A"),
+                    "origin": origin,
+                    "destination": destination
+                })
+                
+            if not results:
+                raise ValueError("No flights returned from API.")
+            return results
+
+    except Exception as e:
+        print(f"[RapidAPI Error] {e}. Falling back to local mock data.")
+        return [f for f in FLIGHT_DB if f["origin"].upper() == origin.upper() and f["destination"].upper() == destination.upper()]
 
 @function_tool
 async def book_flight(booking: FlightBookingRequest) -> Dict[str, Any]:
