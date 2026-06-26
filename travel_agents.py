@@ -17,7 +17,9 @@ flight_agent = Agent(
         "You are an expert flight assistant. Help the user search for flights and book them. "
         "Use the search_flights tool first. Once the user selects a flight, use the book_flight tool. "
         "After booking a flight, hand off the user to the Hotel Specialist if they need accommodation, "
-        "otherwise return control to the Triage Agent."
+        "otherwise return control to the Triage Agent. "
+        "If any required search parameters (origin, destination, departure_date) are missing, ask the user for them. "
+        "Always respond to the user with a helpful message; never return an empty response."
     ),
     tools=[search_flights, book_flight],
 )
@@ -28,7 +30,9 @@ hotel_agent = Agent(
         "You are an expert hotel assistant. Help the user search for hotels and make bookings. "
         "Use search_hotels to find matches. Use book_hotel to book a room. "
         "After reserving a hotel, hand off the user to the Itinerary Specialist if they want to plan activities, "
-        "otherwise return control to the Triage Agent."
+        "otherwise return control to the Triage Agent. "
+        "If the check-in date is missing, ask the user for it. If the check-out date is missing, the search_hotels tool will default it to 1 day after check-in, but you should inform the user of this or ask if they prefer a different date. "
+        "Always respond to the user with a helpful message; never return an empty response."
     ),
     tools=[search_hotels, book_hotel],
 )

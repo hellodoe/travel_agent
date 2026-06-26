@@ -1,6 +1,11 @@
 import os
 import sys
 from typing import List, Dict, Any, Optional
+
+# Force UTF-8 encoding for standard output/error to prevent Windows console crashes when printing Unicode ratings (like ★)
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
 from fastapi import FastAPI, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
@@ -46,6 +51,32 @@ def get_agent_by_name(name: str):
         return itinerary_agent
     return triage_agent
 
+def get_last_assistant_message(result) -> str:
+    if result.final_output:
+        return result.final_output
+        
+    try:
+        history = result.to_input_list()
+        for msg in reversed(history):
+            if msg.get("role") == "assistant":
+                content = msg.get("content")
+                if not content:
+                    continue
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "output_text":
+                            text_parts.append(block.get("text", ""))
+                    text = "".join(text_parts).strip()
+                    if text:
+                        return text
+    except Exception as e:
+        print(f"Error extracting fallback response: {e}")
+        
+    return ""
+
 @app.post("/api/chat")
 async def chat_endpoint(payload: ChatRequest):
     try:
@@ -60,7 +91,7 @@ async def chat_endpoint(payload: ChatRequest):
         result = await Runner.run(agent, input=history)
         
         return {
-            "response": result.final_output,
+            "response": get_last_assistant_message(result),
             "history": result.to_input_list(),
             "active_agent": result.last_agent.name
         }

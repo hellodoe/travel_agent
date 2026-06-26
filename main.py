@@ -1,6 +1,12 @@
 import asyncio
 import os
 import sys
+
+# Force UTF-8 encoding for standard output/error to prevent Windows console crashes when printing Unicode ratings (like ★)
+if sys.platform == 'win32':
+    sys.stdout.reconfigure(encoding='utf-8')
+    sys.stderr.reconfigure(encoding='utf-8')
+
 from dotenv import load_dotenv
 from agents import Runner
 from travel_agents import triage_agent
@@ -13,6 +19,32 @@ api_key = os.getenv("OPENAI_API_KEY")
 if not api_key or api_key == "your-openai-api-key-here":
     print("Warning: OPENAI_API_KEY is not set. Please set it in your .env file.")
     print("Example: OPENAI_API_KEY=sk-proj-...")
+
+def get_last_assistant_message(result) -> str:
+    if result.final_output:
+        return result.final_output
+        
+    try:
+        history = result.to_input_list()
+        for msg in reversed(history):
+            if msg.get("role") == "assistant":
+                content = msg.get("content")
+                if not content:
+                    continue
+                if isinstance(content, str):
+                    return content
+                if isinstance(content, list):
+                    text_parts = []
+                    for block in content:
+                        if isinstance(block, dict) and block.get("type") == "output_text":
+                            text_parts.append(block.get("text", ""))
+                    text = "".join(text_parts).strip()
+                    if text:
+                        return text
+    except Exception as e:
+        print(f"Error extracting fallback response: {e}")
+        
+    return ""
 
 async def run_interactive_loop():
     print("=" * 60)
@@ -51,7 +83,8 @@ async def run_interactive_loop():
                 current_agent = result.last_agent
                 
             # Display final agent output
-            print(f"\n[Agent: {current_agent.name}] {result.final_output}")
+            response_text = get_last_assistant_message(result)
+            print(f"\n[Agent: {current_agent.name}] {response_text}")
             
             # Update history with the full transcript (which converts intermediate states, tool calls, and results)
             history = result.to_input_list()

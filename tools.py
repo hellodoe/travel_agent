@@ -188,15 +188,24 @@ async def _resolve_dest_id(query: str, headers: dict, host: str) -> tuple:
     raise ValueError(f"Could not resolve destination ID for '{query}'")
 
 @function_tool
-async def search_hotels(location: str, checkin: str, checkout: str, guests: int) -> List[Dict[str, Any]]:
+async def search_hotels(location: str, checkin: str, checkout: Optional[str] = None, guests: int = 1) -> List[Dict[str, Any]]:
     """
     Search for hotels at the destination location.
     Args:
         location: City code or name (e.g. PAR, LON)
         checkin: Check-in date in YYYY-MM-DD format
-        checkout: Check-out date in YYYY-MM-DD format
+        checkout: Check-out date in YYYY-MM-DD format (optional)
         guests: Number of guests
     """
+    if not checkout:
+        from datetime import datetime, timedelta
+        try:
+            checkin_dt = datetime.strptime(checkin, "%Y-%m-%d")
+            checkout_dt = checkin_dt + timedelta(days=1)
+            checkout = checkout_dt.strftime("%Y-%m-%d")
+        except Exception:
+            checkout = checkin
+
     print(f"\n[Tool Execution: search_hotels]")
     print(f" -> Location: {location}, Checkin: {checkin}, Checkout: {checkout}, Guests: {guests}")
     
